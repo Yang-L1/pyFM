@@ -9,6 +9,9 @@ from . import laplacian
 import scipy.linalg
 import scipy.sparse as sparse
 
+import robust_laplacian
+
+
 
 class TriMesh:
     """
@@ -288,14 +291,75 @@ class TriMesh:
             if verbose:
                 print(f"Computing {k} eigenvectors")
                 start_time = time.time()
-            self.eigenvalues, self.eigenvectors = laplacian.laplacian_spectrum(self.W, self.A,
-                                                                               spectrum_size=k)
+            self.eigenvalues, self.eigenvectors = laplacian.laplacian_spectrum(self.W, self.A, spectrum_size=k)
 
             if verbose:
                 print(f"\tDone in {time.time()-start_time:.2f} s")
 
+            vis_ev=False
+            if vis_ev:
+
+                import open3d as o3d
+                mesh = o3d.geometry.TriangleMesh()
+                mesh.vertices = o3d.utility.Vector3dVector(self.vertlist)  # [N,3]
+                mesh.triangles = o3d.utility.Vector3iVector(self.facelist)  # [M,3]
+                color = np.zeros_like(self.vertlist)
+                from matplotlib import cm
+                cmap = cm.get_cmap('jet')
+
+                for i in range(1,10):
+                    sclor = self.eigenvectors[:,i]
+                    sclor = (sclor - sclor.min())/(sclor.max()-sclor.min())
+                    sclor=cmap(sclor)[:, :3]
+                    mesh.vertex_colors = o3d.utility.Vector3dVector(sclor)
+                    mesh.compute_vertex_normals()
+
+                    o3d.visualization.draw_geometries ([ mesh])
+                    pass
+
             if return_spectrum:
                 return self.eigenvalues, self.eigenvectors
+
+
+    def pcd_laplacian(self, k, return_spectrum=True):
+
+        # Build point cloud Laplacian
+        L, M = robust_laplacian.point_cloud_laplacian(self.vertlist)
+
+        self.W = L
+        self.A = M
+        # Compute some eigenvectors
+        self.eigenvalues, self.eigenvectors = sparse.linalg.eigsh(L, k, M, sigma=1e-8)
+
+        vis_ev = False
+        if vis_ev:
+
+
+
+
+            import open3d as o3d
+
+            meshB = o3d.geometry.PointCloud()
+            meshB.points = o3d.utility.Vector3dVector(self.vertlist + np.array([[0, -0.5, 0]]))  # [N,3]
+
+            # mesh = o3d.geometry.TriangleMesh()
+            # mesh.vertices = o3d.utility.Vector3dVector(self.vertlist)  # [N,3]
+            # mesh.triangles = o3d.utility.Vector3iVector(self.facelist)  # [M,3]
+            color = np.zeros_like(self.vertlist)
+            from matplotlib import cm
+            cmap = cm.get_cmap('jet')
+
+            for i in range(1, 10):
+                sclor = self.eigenvectors[:, i]
+                sclor = (sclor - sclor.min()) / (sclor.max() - sclor.min())
+                sclor = cmap(sclor)[:, :3]
+                meshB.colors = o3d.utility.Vector3dVector(sclor)
+
+                o3d.visualization.draw_geometries([meshB])
+                pass
+
+        if return_spectrum:
+            return self.eigenvalues, self.eigenvectors
 
     def process(self, k=200, fem_area=False, skip_normals=False, verbose=False):
         """
@@ -309,16 +373,24 @@ class TriMesh:
                        of the diagonal matrix.
         skip_normals : bool - If set to True, skip normals computation
         """
-        if not skip_normals and self.normals is None:
-            self.compute_normals()
 
-        if (self.eigenvectors is not None) and (self.eigenvalues is not None)\
-           and (len(self.eigenvalues) >= k):
-            self.eigenvectors = self.eigenvectors[:,:k]
-            self.eigenvalues = self.eigenvalues[:k]
+        if self.facelist is not None:  #     mesh
+            if not skip_normals and self.normals is None:
+                self.compute_normals()
 
-        else:
-            self.laplacian_spectrum(k, return_spectrum=False, fem_area=fem_area, verbose=verbose)
+            if (self.eigenvectors is not None) and (self.eigenvalues is not None)\
+               and (len(self.eigenvalues) >= k):
+                self.eigenvectors = self.eigenvectors[:,:k]
+                self.eigenvalues = self.eigenvalues[:k]
+
+            else:
+                self.laplacian_spectrum(k, return_spectrum=False, fem_area=fem_area, verbose=verbose)
+
+        else: # point cloud
+
+            self.pcd_laplacian( k )
+
+            pass
 
         return self
 
@@ -335,6 +407,9 @@ class TriMesh:
         -----------------------
         projected_func : (k,p) or (k,) projected function
         """
+
+
+
         if k is None:
             return self.eigenvectors.T@self.A@func
 
@@ -343,6 +418,7 @@ class TriMesh:
 
         else:
             raise ValueError(f'At least {k} eigenvectors should be computed before projecting')
+
 
     def decode(self, projection):
         """

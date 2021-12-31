@@ -234,11 +234,13 @@ class FunctionalMapping:
         if verbose:
             print('\tNormalizing descriptors')
 
-        no1 = np.sqrt(self.mesh1.l2_sqnorm(self.descr1))  # (p,)
-        no2 = np.sqrt(self.mesh2.l2_sqnorm(self.descr2))  # (p,)
+        if self.mesh1.facelist is not None :
 
-        self.descr1 /= no1[None, :]
-        self.descr2 /= no2[None, :]
+            no1 = np.sqrt(self.mesh1.l2_sqnorm(self.descr1))  # (p,)
+            no2 = np.sqrt(self.mesh2.l2_sqnorm(self.descr2))  # (p,)
+
+            self.descr1 /= no1[None, :]
+            self.descr2 /= no2[None, :]
 
         if verbose:
             n_lmks = np.asarray(landmarks).shape[0] if use_lm else 0
@@ -250,8 +252,13 @@ class FunctionalMapping:
         """
         Solves the functional map optimization problem :
 
-        min_C descr_mu * ||C@A - B||^2 + descr_comm_mu * (sum_i ||C@D_Ai - D_Bi@C||^2)
-              + lap_mu * ||C@L1 - L2@C||^2 + orient_mu * (sum_i ||C@G_Ai - G_Bi@C||^2)
+        min_C descr_mu * ||C@A - B||^2
+              + descr_comm_mu * (sum_i ||C@D_Ai - D_Bi@C||^2)
+              + lap_mu * ||C@L1 - L2@C||^2
+
+
+
+              + orient_mu * (sum_i ||C@G_Ai - G_Bi@C||^2)
 
         with A and B descriptors, D_Ai and D_Bi multiplicative operators extracted
         from the i-th descriptors, L1 and L2 laplacian on each shape, G_Ai and G_Bi

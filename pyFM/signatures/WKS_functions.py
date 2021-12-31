@@ -115,4 +115,4 @@ def mesh_WKS(mesh, num_E, landmarks=None, k=None):
     else:
         assert len(mesh.eigenvalues >= k), f"At least ${k}$ eigenvalues should be computed, not {len(mesh.eigenvalues)}"
 
-    return auto_WKS(mesh.eigenvalues[:k], mesh.eigenvectors[:, :k], num_E, landmarks=landmarks, scaled=True)
+    return auto_WKS(mesh.eigenvalues[:k], mesh.eigenvectors[:, :k], num_E, landmarks=landmarks, scaled=False)
